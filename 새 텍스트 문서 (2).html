@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>주문 견적 계산 및 정식 견적서 발급</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    body { background-color: #f4f5f7; margin: 0; padding: 20px 10px; color: #333; }
+    .wrapper { max-width: 780px; margin: 0 auto; }
+    
+    /* 카드 컨테이너 */
+    .card { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); margin-bottom: 24px; }
+    h2 { font-size: 20px; font-weight: 700; margin-top: 0; margin-bottom: 16px; border-bottom: 2px solid #222; padding-bottom: 10px; }
+
+    /* 대분류 탭 */
+    .tabs { display: flex; gap: 6px; margin-bottom: 20px; }
+    .tab-btn { flex: 1; padding: 12px; border: 1px solid #ddd; background: #fafafa; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; color: #666; }
+    .tab-btn.active { background: #222; color: #fff; border-color: #222; }
+
+    /* 소분류 탭 (답례떡 카테고리) */
+    .sub-tabs { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 16px; padding-bottom: 4px; }
+    .sub-tab-btn { padding: 8px 14px; border: 1px solid #e0e0e0; background: #fff; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .sub-tab-btn.active { background: #e53e3e; color: #fff; border-color: #e53e3e; }
+
+    /* 메뉴 선택 그리드 */
+    .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .menu-card { border: 1.5px solid #eaeaea; border-radius: 10px; overflow: hidden; cursor: pointer; transition: all 0.2s; background: #fff; position: relative; }
+    .menu-card:hover { border-color: #aaa; }
+    .menu-card.selected { border-color: #e53e3e; box-shadow: 0 0 0 1.5px #e53e3e; }
+    .menu-img { width: 100%; height: 130px; object-fit: cover; background: #f0f0f0; display: block; }
+    .menu-info { padding: 10px 12px; }
+    .menu-title { font-size: 14px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .menu-desc { font-size: 12px; color: #777; margin-bottom: 6px; min-height: 32px; line-height: 1.3; }
+    .menu-price { font-size: 14px; font-weight: 800; color: #e53e3e; text-align: right; }
+    .min-badge { display: inline-block; font-size: 11px; background: #fef2f2; color: #e53e3e; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 600; }
+
+    /* 옵션 입력란 */
+    .input-box { margin-bottom: 16px; }
+    .input-box label { display: block; font-size: 13.5px; font-weight: 700; margin-bottom: 6px; color: #444; }
+    select, input[type="number"], input[type="text"] { width: 100%; padding: 10px 12px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; }
+    select:focus, input:focus { border-color: #222; }
+
+    /* 사진 업로드 */
+    .photo-upload-box { border: 2px dashed #ccc; border-radius: 8px; padding: 16px; text-align: center; cursor: pointer; background: #fafafa; }
+    .preview-thumb { max-width: 140px; max-height: 140px; border-radius: 6px; margin-top: 10px; display: none; object-fit: cover; border: 1px solid #ddd; }
+
+    /* 버튼 모음 */
+    .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+    .btn { flex: 1; padding: 14px; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; text-align: center; border: none; }
+    .btn-print { background: #2b6cb0; color: #fff; }
+    .btn-kakao { background: #FEE500; color: #191919; }
+
+    /* ========================================================
+       정식 회사용 견적서 양식 (A4 인쇄 표준)
+       ======================================================== */
+    #printableInvoice { background: #fff; border: 1.5px solid #111; padding: 30px; margin-top: 20px; font-size: 13px; color: #111; }
+    .inv-header { text-align: center; margin-bottom: 24px; position: relative; }
+    .inv-header h1 { font-size: 26px; letter-spacing: 6px; margin: 0; padding-bottom: 6px; }
+    .inv-date-no { display: flex; justify-content: space-between; font-size: 12px; border-top: 1px solid #111; padding-top: 6px; }
+    
+    .inv-parties { display: flex; border: 1px solid #111; margin-bottom: 20px; }
+    .inv-party-col { flex: 1; padding: 10px; }
+    .inv-party-col:first-child { border-right: 1px solid #111; }
+    .inv-party-title { font-weight: 800; font-size: 14px; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+    .party-table { width: 100%; border-collapse: collapse; }
+    .party-table td { padding: 3px 0; font-size: 12px; }
+    .party-table td.lbl { width: 70px; color: #555; }
+
+    /* 견적 금액 하이라이트 */
+    .inv-total-bar { border: 1px solid #111; background: #f8f9fa; padding: 10px 14px; font-size: 15px; font-weight: 800; display: flex; justify-content: space-between; margin-bottom: 16px; }
+
+    /* 품목 테이블 */
+    .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .inv-table th, .inv-table td { border: 1px solid #111; padding: 8px; text-align: center; font-size: 12px; }
+    .inv-table th { background: #f0f0f0; }
+    .inv-table td.left { text-align: left; }
+    .inv-table td.right { text-align: right; }
+
+    .inv-attached-photo { margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px; display: none; }
+    .inv-notice { font-size: 11px; color: #666; line-height: 1.5; margin-top: 14px; border-top: 1px solid #ddd; padding-top: 8px; }
+
+    /* 인쇄 전용 스타일 (A4 1장 최적화) */
+    @media print {
+      body { background: #fff; padding: 0; }
+      .no-print { display: none !important; }
+      .wrapper { max-width: 100%; margin: 0; }
+      #printableInvoice { border: 1px solid #000; padding: 20px; margin-top: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrapper">
+  <!-- 상단 컨트롤 폼 (화면 표시용) -->
+  <div class="card no-print">
+    <h2>🛍️ 메뉴 및 수량 선택</h2>
+
+    <!-- 대분류 탭 -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchCategory('gift')">답례떡 선택</button>
+      <button class="tab-btn" onclick="switchCategory('cake')">떡케이크 선택</button>
+    </div>
+
+    <!-- 답례떡 소분류 탭 -->
+    <div id="giftSubTabs" class="sub-tabs">
+      <button class="sub-tab-btn active" onclick="filterGiftGroup('basic')">기본 답례구수 (2·3·6·10구)</button>
+      <button class="sub-tab-btn" onclick="filterGiftGroup('drink')">음료+토끼 세트</button>
+      <button class="sub-tab-btn" onclick="filterGiftGroup('baked')">구움찰떡 세트 (2·4구)</button>
+      <button class="sub-tab-btn" onclick="filterGiftGroup('cup')">곰돌이 컵설기</button>
+      <button class="sub-tab-btn" onclick="filterGiftGroup('rabbit_cake')">토끼바람떡케이크</button>
+    </div>
+
+    <!-- 메뉴 카드 그리드 -->
+    <div class="menu-grid" id="menuGrid"></div>
+
+    <!-- 추가 옵션 영역 -->
+    <div id="dynamicOptions"></div>
+
+    <!-- 사진 첨부 영역 (로컬 파일 업로드) -->
+    <div class="input-box" style="margin-top: 18px;">
+      <label>📷 참고 희망 디자인 사진 첨부 (선택 사항)</label>
+      <div class="photo-upload-box" onclick="document.getElementById('photoInput').click()">
+        <span id="uploadGuideText">클릭하여 원하시는 케이크 도안/답례떡 사진을 업로드하세요</span>
+        <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
+        <br>
+        <img id="previewImg" class="preview-thumb" alt="첨부 미리보기">
+      </div>
+    </div>
+
+    <!-- 주문자/공급받는자 정보 입력 (견적서 기재용) -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px;">
+      <div>
+        <label style="font-size:12px; font-weight:700;">회사명 / 고객 성함</label>
+        <input type="text" id="clientCompany" placeholder="예: (주)한국상사 또는 홍길동" oninput="updateInvoice()">
+      </div>
+      <div>
+        <label style="font-size:12px; font-weight:700;">희망 행사(픽업) 일시</label>
+        <input type="text" id="eventDate" placeholder="예: 2026.10.15 오후 2시" oninput="updateInvoice()">
+      </div>
+    </div>
+
+    <!-- 액션 버튼 -->
+    <div class="btn-row">
+      <button class="btn btn-print" onclick="window.print()">
+        🖨️ 정식 견적서 인쇄 / PDF 저장
+      </button>
+      <button class="btn btn-kakao" onclick="sendKakaoInquiry()">
+        💬 견적 복사 후 카카오톡 상담
+      </button>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       출력용 정식 견적서 영역 (A4 사이즈 표준 규격)
+       ======================================================== -->
+  <div id="printableInvoice">
+    <div class="inv-header">
+      <h1>견 적 서 (ESTIMATE)</h1>
+      <div class="inv-date-no">
+        <span>견적일자: <strong id="invDate"></strong></span>
+        <span>견적번호: <strong id="invNo"></strong></span>
+      </div>
+    </div>
+
+    <div class="inv-parties">
+      <!-- 공급받는 자 (고객/회사) -->
+      <div class="inv-party-col">
+        <div class="inv-party-title">공급받는 자 (고객)</div>
+        <table class="party-table">
+          <tr><td class="lbl">상호/성명</td><td><strong id="invClientName">고객 귀하</strong></td></tr>
+          <tr><td class="lbl">행사일자</td><td id="invClientDate">-</td></tr>
+          <tr><td class="lbl">용도</td><td>행사 답례 / 기념일 축하용</td></tr>
+        </table>
+      </div>
+
+      <!-- 공급자 (매장 정보) -->
+      <div class="inv-party-col">
+        <div class="inv-party-title">공급자 (매장)</div>
+        <table class="party-table">
+          <tr><td class="lbl">상호</td><td>카페 이제 (2.je_cake)</td></tr>
+          <tr><td class="lbl">대표자</td><td>변 영 조 (인)</td></tr>
+          <tr><td class="lbl">업태/종목</td><td>제조·소매 / 떡, 디저트 제조</td></tr>
+          <tr><td class="lbl">연락처</td><td>카카오톡 채널 문의</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- 견적 총액 -->
+    <div class="inv-total-bar">
+      <span>견적 합계 금액 (VAT 포함)</span>
+      <span id="invTotalAmountText">일금 0원정 (₩0)</span>
+    </div>
+
+    <!-- 품목 명세서 -->
+    <table class="inv-table">
+      <thead>
+        <tr>
+          <th style="width: 35%;">품목 및 규격</th>
+          <th style="width: 15%;">수량</th>
+          <th style="width: 20%;">단가(원)</th>
+          <th style="width: 30%;">공급가액(원)</th>
+        </tr>
+      </thead>
+      <tbody id="invTableBody">
+        <!-- JS로 동적 생성 -->
+      </tbody>
+    </table>
+
+    <!-- 첨부된 디자인 사진 (인쇄 시 함께 출력) -->
+    <div class="inv-attached-photo" id="invPhotoSection">
+      <div style="font-size:12px; font-weight:700; margin-bottom:4px;">[첨부 도안 / 요청 디자인 사진]</div>
+      <img id="invAttachedImg" style="max-height: 160px; border: 1px solid #ccc; border-radius: 4px;" alt="디자인 사진">
+    </div>
+
+    <!-- 비고사항 -->
+    <div class="inv-notice">
+      • <strong>안내사항</strong>: 당일 갓 찐 떡을 제공해 드리므로 행사 당일 픽업을 권장합니다.<br>
+      • <strong>답례 스티커</strong>: 요청 시 답례 문구 스티커를 서비스로 부착해 드립니다.<br>
+      • <strong>유효기간</strong>: 본 견적서는 견적일로부터 7일간 유효하며, 일정 확정 시 카카오톡 채널로 연락 부탁드립니다.
+    </div>
+  </div>
+</div>
+
+<script>
+  // 카카오톡 채널 URL (본인 채널 주소 입력)
+  const KAKAO_CHANNEL_URL = "https://pf.kakao.com/_xxxxxx";
+
+  // 메뉴 데이터베이스 (보내주신 가격표 기준)
+  const menuData = {
+    // 1. 답례떡
+    gift_basic: [
+      { id: 'g_2', title: '답례떡 2구', price: 3800, min: 20, desc: '백설기 + 꿀떡/경단 (최소주문 20세트)', img: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=300&auto=format&fit=crop&q=60' },
+      { id: 'g_3', title: '답례떡 3구', price: 4800, min: 15, desc: '인기 3구 구성 (최소주문 15세트)', img: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=300&auto=format&fit=crop&q=60' },
+      { id: 'g_6', title: '답례떡 6구', price: 11000, min: 7, desc: '풍성한 6구 박스 (최소주문 7세트)', img: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=300&auto=format&fit=crop&q=60' },
+      { id: 'g_10', title: '답례떡 10구', price: 20000, min: 3, desc: 'VIP 선물용 10구 (최소주문 3세트)', img: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=300&auto=format&fit=crop&q=60' }
+    ],
+    gift_drink: [
+      { id: 'gd_2', title: '음료 + 토끼 2구', price: 4800, min: 15, desc: '음료 포함 실속형 (최소주문 15세트)', img: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=300&auto=format&fit=crop&q=60' },
+      { id: 'gd_3', title: '★ 음료 + 토끼 3구', price: 5800, min: 10, desc: '인기 대표 음료 세트 (최소 10세트)', img: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=300&auto=format&fit=crop&q=60' }
+    ],
+    gift_baked: [
+      { id: 'gb_2', title: '구움찰떡 2구', price: 4500, min: 15, desc: '쫀득한 구움찰떡 2구 (최소 15세트)', img: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=300&auto=format&fit=crop&q=60' },
+      { id: 'gb_4', title: '구움찰떡 4구', price: 8000, min: 10, desc: '초코·흑임자·단호박·쑥·로투스 (최소 10세트)', img: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=300&auto=format&fit=crop&q=60' }
+    ],
+    gift_cup: [
+      { id: 'gc_1', title: '곰돌이 컵설기 (1구)', price: 5500, min: 10, desc: '머핀 크기 대형 컵설기+개별상자+꼬깔모자 (최소 10개)', img: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&auto=format&fit=crop&q=60' }
+    ],
+    gift_rabbit_cake: [
+      { id: 'grc_1', title: '♥ 토끼바람떡케이크 1호', price: 55000, min: 1, desc: '토끼 10마리 올라간 스페셜 케이크', img: 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?w=300&auto=format&fit=crop&q=60' },
+      { id: 'grc_2', title: '♥ 토끼바람떡케이크 2호', price: 65000, min: 1, desc: '토끼 15마리 올라간 풍성한 케이크', img: 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?w=300&auto=format&fit=crop&q=60' }
+    ],
+    // 2. 일반 떡케이크
+    cakes: [
+      { id: 'c_1', title: '1호 앙금플라워 (15cm)', price: 55000, min: 1, desc: '3~4인용 소규모 기념일', img: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?w=300&auto=format&fit=crop&q=60' },
+      { id: 'c_2', title: '2호 앙금플라워 (18cm)', price: 65000, min: 1, desc: '★ 인기 1위 온가족 생신용 (5~6인)', img: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?w=300&auto=format&fit=crop&q=60' },
+      { id: 'c_3', title: '3호 앙금플라워 (21cm)', price: 75000, min: 1, desc: '7~8인용 단체 가족 모임용', img: 'https://images.unsplash.com/photo-1588195538326-c5b1e9f80a1b?w=300&auto=format&fit=crop&q=60' },
+      { id: 'c_num', title: '광주 숫자케이크', price: 90000, min: 1, desc: '환갑·칠순·팔순 단일 사이즈 최고 인기', img: 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?w=300&auto=format&fit=crop&q=60' },
+      { id: 'c_2tier', title: '2단 케이크 (1호+3호)', price: 135000, min: 1, desc: '화려함 극대화 행사용 프리미엄', img: 'https://images.unsplash.com/photo-1535141192574-5d4897c13136?w=300&auto=format&fit=crop&q=60' }
+    ]
+  };
+
+  let currentCategory = 'gift';
+  let currentSubTab = 'basic';
+  let selectedItem = menuData.gift_basic[1]; // 기본 3구 세트
+  let uploadedImageDataUrl = "";
+
+  // 초기 실행
+  window.onload = function() {
+    initDateAndNo();
+    renderMenuGrid();
+    renderOptions();
+    updateInvoice();
+  };
+
+  function initDateAndNo() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    document.getElementById('invDate').innerText = `${yyyy}년 ${mm}월 ${dd}일`;
+    document.getElementById('invNo').innerText = `INV-${yyyy}${mm}${dd}-${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+
+  function switchCategory(cat) {
+    currentCategory = cat;
+    document.querySelectorAll('.tab-btn').forEach((b, idx) => {
+      b.classList.toggle('active', (cat === 'gift' && idx === 0) || (cat === 'cake' && idx === 1));
+    });
+    document.getElementById('giftSubTabs').style.display = (cat === 'gift') ? 'flex' : 'none';
+
+    if (cat === 'gift') {
+      filterGiftGroup(currentSubTab);
+    } else {
+      selectedItem = menuData.cakes[1]; // 2호 기본 선택
+      renderMenuGrid();
+      renderOptions();
+      updateInvoice();
+    }
+  }
+
+  function filterGiftGroup(groupKey) {
+    currentSubTab = groupKey;
+    document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('onclick').includes(groupKey));
+    });
+    selectedItem = menuData['gift_' + groupKey][0];
+    renderMenuGrid();
+    renderOptions();
+    updateInvoice();
+  }
+
+  function renderMenuGrid() {
+    const grid = document.getElementById('menuGrid');
+    grid.innerHTML = '';
+    const list = (currentCategory === 'cake') ? menuData.cakes : menuData['gift_' + currentSubTab];
+
+    list.forEach(item => {
+      const card = document.createElement('div');
+      card.className = `menu-card ${selectedItem.id === item.id ? 'selected' : ''}`;
+      card.onclick = () => {
+        selectedItem = item;
+        renderMenuGrid();
+        renderOptions();
+        updateInvoice();
+      };
+
+      card.innerHTML = `
+        <img class="menu-img" src="${item.img}" alt="${item.title}">
+        <div class="menu-info">
+          ${item.min > 1 ? `<span class="min-badge">최소 주문 ${item.min}개</span>` : ''}
+          <div class="menu-title">${item.title}</div>
+          <div class="menu-desc">${item.desc}</div>
+          <div class="menu-price">${item.price.toLocaleString()}원</div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  function renderOptions() {
+    const container = document.getElementById('dynamicOptions');
+    container.innerHTML = '';
+
+    if (currentCategory === 'cake') {
+      container.innerHTML = `
+        <div class="input-box">
+          <label>설기 맛 선택 (추가금)</label>
+          <select id="optFlavor" onchange="updateInvoice()">
+            <option value="0" data-name="기본 백설기">기본 백설기 (+0원)</option>
+            <option value="4000" data-name="단호박 설기">단호박 설기 (+4,000원)</option>
+            <option value="4000" data-name="흑임자 설기">흑임자 설기 (+4,000원)</option>
+            <option value="5000" data-name="블루베리 설기">블루베리 잼 설기 (+5,000원)</option>
+          </select>
+        </div>
+        <div class="input-box">
+          <label>케이크 수량</label>
+          <input type="number" id="optQty" value="1" min="1" oninput="updateInvoice()">
+        </div>
+      `;
+    } else {
+      let flavorHtml = '';
+      if (currentSubTab === 'baked') {
+        flavorHtml = `
+          <div class="input-box">
+            <label>희망 구움찰떡 맛 (5종 중 선택 가능)</label>
+            <input type="text" id="optBakedFlavor" value="초코, 흑임자, 단호박, 쑥, 로투스 혼합" oninput="updateInvoice()">
+          </div>
+        `;
+      }
+      container.innerHTML = `
+        ${flavorHtml}
+        <div class="input-box">
+          <label>주문 수량 (최소 주문량: ${selectedItem.min}세트)</label>
+          <input type="number" id="optQty" value="${Math.max(selectedItem.min, 20)}" min="${selectedItem.min}" oninput="updateInvoice()">
+        </div>
+        <div class="input-box">
+          <label>답례 스티커 문구 (서비스 부착)</label>
+          <input type="text" id="optStickerText" placeholder="예: 감사합니다. 영조·지은 올림" oninput="updateInvoice()">
+        </div>
+      `;
+    }
+  }
+
+  function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      uploadedImageDataUrl = evt.target.result;
+      document.getElementById('previewImg').src = uploadedImageDataUrl;
+      document.getElementById('previewImg').style.display = 'inline-block';
+      document.getElementById('uploadGuideText').innerText = `선택된 파일: ${file.name}`;
+      
+      // 견적서 인쇄 영역에도 반영
+      document.getElementById('invAttachedImg').src = uploadedImageDataUrl;
+      document.getElementById('invPhotoSection').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function updateInvoice() {
+    const qty = parseInt(document.getElementById('optQty')?.value) || 1;
+    const clientName = document.getElementById('clientCompany').value.trim() || '고객 귀하';
+    const eventDate = document.getElementById('eventDate').value.trim() || '미정 (상담 시 조율)';
+
+    document.getElementById('invClientName').innerText = clientName;
+    document.getElementById('invClientDate').innerText = eventDate;
+
+    let subTotal = 0;
+    let rowsHtml = '';
+
+    if (currentCategory === 'cake') {
+      const flavorEl = document.getElementById('optFlavor');
+      const flavorPrice = parseInt(flavorEl ? flavorEl.value : 0);
+      const flavorName = flavorEl ? flavorEl.options[flavorEl.selectedIndex].getAttribute('data-name') : '';
+
+      const unitPrice = selectedItem.price + flavorPrice;
+      const rowTotal = unitPrice * qty;
+      subTotal += rowTotal;
+
+      rowsHtml += `
+        <tr>
+          <td class="left"><strong>${selectedItem.title}</strong><br><span style="color:#666; font-size:11px;">(맛: ${flavorName})</span></td>
+          <td>${qty}개</td>
+          <td class="right">${unitPrice.toLocaleString()}원</td>
+          <td class="right"><strong>${rowTotal.toLocaleString()}원</strong></td>
+        </tr>
+      `;
+    } else {
+      const unitPrice = selectedItem.price;
+      const rowTotal = unitPrice * qty;
+      subTotal += rowTotal;
+
+      const sticker = document.getElementById('optStickerText')?.value.trim();
+      const stickerInfo = sticker ? `<br><span style="color:#666; font-size:11px;">(스티커 문구: "${sticker}")</span>` : '';
+
+      rowsHtml += `
+        <tr>
+          <td class="left"><strong>${selectedItem.title}</strong>${stickerInfo}</td>
+          <td>${qty}세트</td>
+          <td class="right">${unitPrice.toLocaleString()}원</td>
+          <td class="right"><strong>${rowTotal.toLocaleString()}원</strong></td>
+        </tr>
+      `;
+    }
+
+    document.getElementById('invTableBody').innerHTML = rowsHtml;
+    document.getElementById('invTotalAmountText').innerText = `일금 ${numberToKorean(subTotal)} (₩${subTotal.toLocaleString()})`;
+  }
+
+  function numberToKorean(num) {
+    if (num === 0) return '영원정';
+    const units = ['', '만', '억'];
+    const smallUnits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
+    let result = '';
+    let unitIdx = 0;
+    let temp = num;
+
+    while (temp > 0) {
+      let part = temp % 10000;
+      if (part > 0) {
+        let partStr = '';
+        let d = part % 10;
+        let c = Math.floor(part / 10) % 10;
+        let b = Math.floor(part / 100) % 10;
+        let a = Math.floor(part / 1000);
+
+        if (a > 0) partStr += (a > 1 ? smallUnits[a] : '') + '천';
+        if (b > 0) partStr += (b > 1 ? smallUnits[b] : '') + '백';
+        if (c > 0) partStr += (c > 1 ? smallUnits[c] : '') + '십';
+        if (d > 0) partStr += smallUnits[d];
+
+        result = partStr + units[unitIdx] + ' ' + result;
+      }
+      temp = Math.floor(temp / 10000);
+      unitIdx++;
+    }
+    return result.trim() + '원정';
+  }
+
+  function sendKakaoInquiry() {
+    const client = document.getElementById('clientCompany').value.trim() || '고객';
+    const eventDate = document.getElementById('eventDate').value.trim() || '날짜 미정';
+    const qty = document.getElementById('optQty').value;
+    const total = document.getElementById('invTotalAmountText').innerText;
+
+    let msg = `[주문 및 견적 문의]\n- 의뢰자/회사: ${client}\n- 행사(수령)일시: ${eventDate}\n- 선택 품목: ${selectedItem.title}\n- 수량: ${qty}\n- 예상 견적: ${total}\n\n`;
+
+    if (uploadedImageDataUrl) {
+      msg += `📌 도안 사진을 첨부하셨습니다! 열리는 카카오톡 채팅창에 방금 첨부하신 사진을 함께 전송해 주세요.\n`;
+    }
+
+    navigator.clipboard.writeText(msg).then(() => {
+      alert("견적 내역이 복사되었습니다!\n열리는 카카오톡 채팅창에 [붙여넣기]하고 사진을 함께 전송해 주세요.");
+      window.open(KAKAO_CHANNEL_URL, "_blank");
+    }).catch(() => {
+      window.open(KAKAO_CHANNEL_URL, "_blank");
+    });
+  }
+</script>
+
+</body>
+</html>
